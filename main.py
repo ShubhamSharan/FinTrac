@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import style
 import pandas as pd
 import pandas_datareader.data as web
+from plotly import graph_objs as go
 
 #TODO:  Your Portfolio - YN
 #TODO: https://www.youtube.com/watch?v=cjcUVCtVbuc
@@ -31,13 +32,22 @@ def checkStock():
     st.markdown('The data here is for **'+selected+'**.')
     # A calculation to analyze data points by creating a series of averages of
     # different subsets of the full data set.
-    df['100ma'] = df['Adj Close'].rolling(window=100).mean()
+    df['100ma'] = df['Adj Close'].rolling(window=100,min_periods=0).mean()
     # df.dropna(inplace=True)
     oparr = list(df.columns.values)
     options = st.multiselect('What columns to keep in dataset',oparr,[oparr[0], oparr[1]])
     dfx = df[options]
     st.line_chart(dfx)
     st.write(df.tail(show))
+    st.subheader("Data Since Day 1")
+    fig = go.Figure(data=[go.Candlestick(x=df.index,
+                    open=df['Open'],
+                    high=df['High'],
+                    low=df['Low'],
+                    close=df['Close'])])
+
+    st.plotly_chart(fig)
+
 
 #Main - SS
 def main():
