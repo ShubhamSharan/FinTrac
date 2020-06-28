@@ -8,6 +8,7 @@ from plotly import graph_objs as go
 import numpy as np
 from firebase import firebase
 import json
+import seaborn as sns
 
 #TODO:  Your Portfolio - YN
 #TODO: https://www.youtube.com/watch?v=cjcUVCtVbuc
@@ -22,7 +23,7 @@ secret = 'bingaroo'
 def personalAccount():
     return
 
-    
+
 
 def resource_sidebar_info():
 
@@ -51,7 +52,7 @@ def resource_sidebar_info():
         add = execute.button('Add Income')
         if (add):
 
-            addIncome([amount_str, income_date, source, income_type])
+            addIncome([amount_str, income_date, source, income_type, amount])
     else: # adding expense form
         title.markdown('New Expense')
         expense_type = exp_inc_type.selectbox('Type',
@@ -73,7 +74,7 @@ def resource_sidebar_info():
         add = st.sidebar.button('Add Expense')
         if (add):
 
-            addExpense([amount_str, expense_date, place, expense_type])
+            addExpense([amount_str, expense_date, place, expense_type, amount])
         
     
     return
@@ -97,6 +98,14 @@ def addExpense(expense_data):
     
     with st.spinner('Executing...'):
         result = frbase.post('fintrac-edb12/expenses_income',data)
+
+        #update bank and budget
+        prev_bank = frbase.get('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','bank')
+        prev_budget = frbase.get('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','budget')
+        new_bank = prev_bank - expense_data[4]
+        new_budget = prev_budget - expense_data[4]
+        frbase.put('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','bank',new_bank)
+        frbase.put('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','budget',new_budget)
     st.sidebar.success('Expense added')      
 
     return
@@ -113,7 +122,14 @@ def addIncome(income_data):
     }
         
     with st.spinner('Executing...') :
+        #add income
         result = frbase.post('fintrac-edb12/expenses_income',data) 
+
+        #update bank
+        prev_bank = frbase.get('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','bank')
+        new_bank = prev_bank + income_data[4]
+        st.write(new_bank)
+        frbase.put('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','bank',new_bank)
     st.sidebar.success('Income added')
     st.sidebar.balloons()   
 
@@ -142,33 +158,44 @@ def sortDataByDate(data):
                     new_data.append(entry)
                     input_data.remove(entry)
                     break
-
   
     return new_data
 
-def summary_account():
 
+
+def adjustSavingsBudget():
+    
+    return
+
+def getBankInformation():
+    
     # connect to firebase
     frbase = firebase.FirebaseApplication("https://fintrac-edb12.firebaseio.com/")
 
     # get the data
-    results = frbase.get('fintrac-edb12/expenses_income','')
-    empty_dict = not results
-    total_available = 0
-    if empty_dict == False:
-        for key, value in results.items():
-            total_available += float(value["amount"])
+    bank = frbase.get('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','bank')
+    budget = frbase.get('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','budget')
+    savings = frbase.get('fintrac-edb12/bank_info/-M8nTKSEMzg5rKW2YX4r','savings')
 
-    bank = 'Bank: $' + str(total_available)
+    data = [bank, budget, savings]
+    
+    return data
+
+def summary_account():
+
+    data = getBankInformation()
+    bank = 'Bank: $' + str(data[0])
+    budget = 'Budget: $' + str(data[1])
+    savings = 'Savings: $' + str(data[2])
 
     st.header('Summary of account')
     st.write(bank)
-    st.write('Savings: $')
-    st.write('Budget: $')
+    st.write(savings)
+    st.write(budget)
     
     return
 
-def adjustSavingsBudget():
+def setBankInformation(bank_data):
     return
 
 def resources():
@@ -211,10 +238,64 @@ def resources():
     df = pd.DataFrame(sorted_data, columns = ['Type','Where','Date','Income','Expense'])
     st.table(df)
     resource_sidebar_info()
-    st.sidebar.markdown('')    
+    st.sidebar.markdown('')  
 
     return
 
+def setSavings():
+    # connect to firebase
+    frbase = firebase.FirebaseApplication("https://fintrac-edb12.firebaseio.com/")
+
+    # get the data
+    curr_employ_saving = frbase.get('fintrac-edb12/bank_info/save_budget_set/employment','')
+    curr_invest_saving = frbase.get('fintrac-edb12/bank_info/save_budget_set/investment','')
+    curr_pens_saving = frbase.get('fintrac-edb12/bank_info/save_budget_set/pension_other','')
+    curr_self_employ_saving = frbase.get('fintrac-edb12/bank_info/save_budget_set/self_employment','')
+    #results = frbase.get('fintrac-edb12/bank_info/save_budget_set','')
+
+    st.header('Set savings')
+    st.write('The values in each box are your current set savings percentage for each category')
+    st.subheader('Employment')
+    st.number_input('What percentage of your employment income do you want to save?',curr_employ_saving)
+
+    st.subheader('Investment')
+    st.number_input('What percentage of your investment income do you want to save?',curr_invest_saving)
+
+    st.subheader('Pension/Other')
+    st.number_input('What percentage of your pension/other income do you want to save?',curr_pens_saving)
+
+    st.subheader('Self Employment')
+    st.number_input('What percentage of your self employment income do you want to save?',curr_self_employ_saving )
+
+    save = st.button('Save Changes')
+
+    return
+
+def setBudget():
+    st.header('Set Monthly budget')
+    monthly_budget = st.number_input('The amount in the box below is your current set monthly budget',400)
+
+    save = st.button('Save Changes')
+    st.write('The monthly budget that you specify here will be taken from your primary source of income. By default, this is your employment income. You can change your primary source of income in the "Add income/expense" page on the sidebar')
+ 
+    return
+
+def setSavingsBudget():
+    
+    st.header('Set Savings and Budget Amount')
+    savingsOrBudget = ['Savings','Budget']
+    option = st.selectbox('Choose what to set', savingsOrBudget)
+    if (option == 'Savings'):
+        setSavings()
+    else:
+        setBudget()
+    
+
+    return
+  
+def expenseOrIncome():
+    return 
+    
 # Stock Management - SS
 def checkStock():
     st.title('Check Stock')
@@ -249,7 +330,7 @@ def checkStock():
 #Main - SS
 def main():
     style.use('ggplot')
-    arr = ['Resources','Check Stock','Add Expense/Income']
+    arr = ['Resources','Check Stock','Add Expense/Income','Set Savings and Budget']
     st.sidebar.title('FinTrac')
     st.sidebar.markdown("FinTrac is my personal finance tracker and notebook for refference material")
     option = st.sidebar.selectbox('What are you looking for?',arr)
@@ -259,6 +340,8 @@ def main():
         resources()
     elif (option == 'Check Stock'):
         checkStock()
+    elif (option == 'Set Savings and Budget'):
+        setSavingsBudget()
     else:
         expenseOrIncome()
 
